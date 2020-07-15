@@ -115,9 +115,10 @@ datos segment
                      db 43,"| Semestre I   -*ENTER PARA SEGUIR*- 2020 |"
                      db 43," ========================================= "
 
-    teclaGuardada db 0
-    ;matriz de juego
-    matrizVideo db 4000 dup('!',15,15)
+    msgVideoPaletaColores db 32,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,14,14,15,15
+    espacio db 20h
+    ;matriz de paint
+    matrizVideo dw 4000 dup(9020h) ; COLOR, ASCII en TASM es AL|AH
     numFilasCargadas db 0
     cursos db 0,0,'K'
     N db 25
@@ -125,6 +126,8 @@ datos segment
 
     x db 0;direccion
     y db 0;direccion
+    cursor db 0,0,1,0,'_', 250 
+    teclaGuardada db 0
     salir dw 0
 datos ends
 
@@ -140,7 +143,6 @@ codigo segment
 
 pressEnterContinueEco proc near
   PUSH ax
-  MOV teclaGuardada, 0
   XOR ax, ax
   MOV ah, 01h
   noPressEnter:
@@ -158,6 +160,7 @@ getKeyPress proc near
   JZ noHayTecla
   XOR AH,AH
   INT 16H
+  MOV teclaGuardada, al
   stc
   JMP finalGetKeyPress
   noHayTecla:
@@ -167,7 +170,34 @@ getKeyPress proc near
   ret
 getKeyPress endp
 
-movimientoSokoban proc near
+verificarColisiones proc near
+  pushRegisters
+  ;posicion del cursor en cursor
+    MOV ch, cursor[0]
+    MOV cl, cursor[1]
+    ADD ch, x
+    ADD cl, y
+
+    CMP ch, N
+    JAE noSePuedeMover
+    CMP cl, M 
+    JAE noSePuedeMover
+ 
+      sePuedeMoverCursor:
+        XOR ax, ax 
+        MOV x, ah
+        MOV y, al
+        MOV byte ptr cursor[0], ch
+        MOV byte ptr cursor[1], cl
+        JMP finalVerificarColisiones
+      noSePuedeMover:
+        JMP finalVerificarColisiones
+  finalVerificarColisiones:
+  popRegisters
+  ret
+verificarColisiones endp
+
+movimientoCursor proc near
   ;este procedimiento se encarga del movimiento del matrizSokoban
   ;se espera del teclado que se presione 
   pushRegisters
@@ -183,7 +213,6 @@ movimientoSokoban proc near
   ;derecha = 77
   ;abajo = 80
   ;izquierda = 75
-  MOV teclaGuardada, 0
     CMP ah, 72
     JNE noPresionoArriba
     JMP presionoArriba
@@ -238,7 +267,7 @@ movimientoSokoban proc near
 
   popRegisters
   ret
-movimientoSokoban endp
+movimientoCursor endp
 
 limpiarPantalla proc near
   PUSH ax
@@ -357,16 +386,15 @@ printMatrizEnVideoGeneric proc near
       mov  ax,0B800h
       mov  es,ax
 
-      mov  cl, byte ptr[si]
+      mov  cl, M
       xor ch, ch
-      inc si
+      ;inc si
 
       cicloPrintFilaEnVideoGeneric:;Bucle que se encargara de pintar la string
-          mov  al, [si]        ;caracteres de la pantalla para limpiarla
-          mov  ah, 14          
-          OR ah, 10h
+          mov  ax, [si]        ;caracteres de la pantalla para limpiarla
           mov  es:[di], ax
           inc  si             ;Pasamos a apuntar a la siguiente letra del saludo
+          inc  si
           inc  di
           inc  di
 
@@ -401,13 +429,12 @@ imprimirStrVideo proc near
   mov  cl, byte ptr[si]
   xor ch, ch
   inc si
-
-  cicloImprimirStrVideo:    ;Bucle que se encargara de pintar la string
-      mov  al, [si]        ;caracteres de la pantalla para limpiarla
-      mov  ah, 3         ;Fondo azul, letras blancas
-      ;
+  inc si
+  cicloImprimirStrVideo: 
+      mov  ax, [si]        
       mov  es:[di], ax
-      inc  si             ;Pasamos a apuntar a la siguiente letra del saludo
+      inc  si             
+      inc  si
       inc  di
       inc  di
 
@@ -417,13 +444,135 @@ imprimirStrVideo proc near
   ret
 imprimirStrVideo endp
 
+imprimirPaletaColorVideo proc near
+  ;este metodo imprime un string en una parte especifica de
+  ;la pantalla, se recibe la fila y columna en dh, dl
+  ;se recibe en el si el puntero al string like PASCAL
+  ;/*Modificado de imprimirStrVideo, solo para la paleta de color*/
+  pushRegisters
+  lea si, msgVideoPaletaColores
+  MOV dh, 24
+  MOV dl, 0
+  MOV al, 80
+  MUL dh
+  shl ax, 1
+  XOR dh, dh
+  shl dx, 1
+  ADD ax, dx
+  mov di, ax ;posicion en la pantalla
+
+  mov  ax,0B800h
+  mov  es,ax
+
+  mov  cl, byte ptr[si]
+  xor ch, ch
+  inc si
+
+  cicloImprimirPaletaColorVideo:    ;Bucle que se encargara de pintar la paleta de color
+      mov  al, espacio    
+      MOV ah, [si]
+      SHL ah, 4    
+      mov  es:[di], ax
+      inc  si             
+      inc  di
+      inc  di
+
+      LOOP cicloImprimirPaletaColorVideo
+  popRegisters
+  ret
+  ret
+imprimirPaletaColorVideo endp
+
+imprmirCursorVideo proc near
+  pushRegisters
+  lea si, cursor
+  inc si
+  inc si
+  MOV dh, cursor[0]
+  MOV dl, cursor[1]
+  CALL imprimirStrVideo
+
+  popRegisters
+  ret
+imprmirCursorVideo endp
+
+imprimirMatrizVideo proc near
+  pushRegisters
+  CALL limpiarPantalla
+  XOR dx, dx
+  MOV ch, 25
+  MOV cl, 80
+  lea si, matrizVideo
+  CALL printMatrizEnVideoGeneric
+  popRegisters
+  ret
+imprimirMatrizVideo endp
+
+pintar proc near
+  pushRegisters
+  ;Esta parte lo que hace es elegir el color de la paleta y ponerlo en el cursor
+  MOV al, cursor[0] 
+  CMP al, 24
+  JE estaEnLaPaletaDeColorX
+  JMP finalPintar
+  estaEnLaPaletaDeColorX:
+    MOV al, cursor[1]
+    CMP al, 32
+    JB estaEnLaPaletaDeColorY
+    JMP finalPintar
+    estaEnLaPaletaDeColorY:
+      MOV si, offset msgVideoPaletaColores
+      INC si
+      XOR ah, ah
+      MOV al, cursor[1]
+      ADD si, ax
+      MOV al, [si]
+      SHL al, 4
+      OR al, 10
+      MOV byte ptr cursor[5], al
+
+  finalPintar:
+
+  popRegisters
+  ret
+pintar endp
+
+cicloGeneral proc near
+  pushRegisters
+  CALL imprimirMatrizVideo
+  CALL imprimirPaletaColorVideo
+  CALL imprmirCursorVideo
+  ciclo_CicloGeneral:
+    CALL movimientoCursor
+    CMP salir, 1
+    JE finalCicloGeneral
+    CMP teclaGuardada, ' '
+    JNE noPresionoEspacio
+    CALL pintar
+    noPresionoEspacio:
+
+    ;CALL capturadorOpcionesMenu
+    
+    CALL verificarColisiones
+    CALL imprimirMatrizVideo
+    CALL imprimirPaletaColorVideo
+    CALL imprmirCursorVideo
+    JMP ciclo_CicloGeneral
+  finalCicloGeneral:
+
+  popRegisters
+  ret
+cicloGeneral endp
+
   inicio: 
     
   mov ax, datos
   mov ds, ax
   mov ax, pila
   mov ss, ax
-  
+
+  CALL cicloGeneral
+
   mov  ax,4C00h
   int  21h
 
