@@ -811,17 +811,18 @@ mouseEvent proc near
     XOR ah, ah
     CMP al, cursor[0]
     JNE seMovioMouse
-    
+    mov ax, 2h
+    int 33h
 
     ;Revisar el teclado por salir y ayuda y acerca de
     CALL getKeyPress
     JC presionoTeclaMouseEvent
+    JMP esperarMouse
+    seMovioMouse:
     mov ax, 2h
     int 33h
-    JMP esperarMouse
     mov  ax, 3h
     int  33h
-    seMovioMouse:
     mov  [mouseClick], bx ; Write the value of BX to mouseClick
     mov  [mouseX], cx     ; Write the value of CX to mouseX
     mov  [mouseY], dx     ; Write the value of DX to mouseY
@@ -839,7 +840,8 @@ mouseEvent proc near
     JMP finalMouseEvent
 
     presionoTeclaMouseEvent:
-
+    mov ax, 2h
+    int 33h
     CALL capturadorOpcionesMenu
     JMP esperarMouse
     finalMouseEvent:
