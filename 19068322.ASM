@@ -65,21 +65,13 @@ datos segment
     
     var dw ?
 
-    msgNivel db 11,"Nivel: ","    ",'$'
-     
-    ;Mensajes de teclado
-    msgTecladoAyuda db 8,"Ayuda: H"
-    msgTecladoReset db 8,"Reset: R"
-    msgTecladoSigNivel db 18,"Siguiente Nivel: S"
-    msgTecladoAntNivel db 17,"Anterior Nivel: A"
-    msgTecladoHighScore db 13,"HighScores: N"
-    msgTecladoSalir db 10,"Salir: ESC"
-    msgTecladoAcerdaDe db 11,"AcercaDe: M"
+    msgMouseX db "Pos X:",'$'
+    msgMouseY db "Pos Y:",'$'
 
     msgVideoAcercaDe db 43," ========================================= "
                      db 43,"| Acerca De:            Sokoban TEC Arqui |"
                      db 43,"| Intstituto Tecnologico de Costa Rica    |"
-                     db 43,"| TxtFiller:                               |"
+                     db 43,"| TxtFiller:                              |"
                      db 43,"|    +Juego en Ensamblador con video      |"
                      db 43,"|    +Desarrollado por Andrew JGC         |"
                      db 43,"|    +Uso directo del teclado             |"
@@ -102,21 +94,9 @@ datos segment
                      db 43,"| Semestre I   -*ENTER PARA SEGUIR*- 2020 |"
                      db 43," ========================================= "
 
-    msgVideoErrNivel db 43," ========================================= "
-                     db 43,"| Error Lectura:        Sokoban TEC Arqui |"
-                     db 43,"| Error con la lectura de un nivel, tiene |"
-                     db 43,"| diferente numero de cajas y entregas o  |"
-                     db 43,"| el nivel no existe.....                 |"
-                     db 43,"|    +Presione Enter para intentar leer   |"
-                     db 43,"|     el siguiente nivel                  |"
-                     db 43,"|    +Error con el nivel:                 |"
-                     db 43,"|                                         |"
-                     db 43,"|                                         |"
-                     db 43,"| Semestre I   -*ENTER PARA SEGUIR*- 2020 |"
-                     db 43," ========================================= "
 
     msgVideoPaletaColores db 32,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,14,14,15,15
-    msgVideoMenu db 38,"|AcerdaDe: H | Ayuda: A |Modo: P & F |"
+    msgVideoMenu db 47,"|AcerdaDe: A | Ayuda: H |Modo: P & F | Clear: C"
     espacio db 219
     ;matriz de paint
     matrizVideo db 4000 dup(32) ;ASCII █ y color Azul
@@ -130,6 +110,11 @@ datos segment
     modo db 0 ;0 modo paint | 1 modo filler
     teclaGuardada db 0
     salir dw 0
+
+    mouseClick dw ?
+    mouseX dw ?
+    mouseY dw ?
+    mousePos dw ?
 datos ends
 
 pila segment stack 'stack'
@@ -145,7 +130,7 @@ codigo segment
 pressEnterContinueEco proc near
   PUSH ax
   XOR ax, ax
-  MOV ah, 01h
+  MOV ah, 07h
   noPressEnter:
   int 21h
   CMP al, 13
@@ -255,13 +240,7 @@ movimientoCursor proc near
       MOV y, 0
       JMP finalMovimientoSokoban
   noPresionoTecla:
-  CMP al, 27
-  JE salirJuego
-  MOV teclaGuardada, al
-  JMP finalMovimientoSokoban
-  salirJuego:
-    MOV ax, 1
-    MOV salir, ax
+  
 
   finalMovimientoSokoban:
 
@@ -269,6 +248,66 @@ movimientoCursor proc near
   popRegisters
   ret
 movimientoCursor endp
+
+capturadorOpcionesMenu proc near
+  pushRegisters
+  CMP teclaGuardada, 0
+  JNE hayTeclaGuardada
+  JMP noPresionoTeclaAyudas
+  hayTeclaGuardada:
+  MOV al, teclaGuardada
+  ;al ->
+  ;ayuda  = H
+  ;acercaDe = M
+    OR al, 32; hacer mayuscula
+    CMP al, 'h'
+    JNE noPresionoAyuda
+    JMP presionoAyuda
+    noPresionoAyuda:
+      CMP al, 'a'
+      JNE noPresionoAcercaDe
+      JMP presionoAcercaDe
+      noPresionoAcercaDe:
+        CMP al, 59
+        JNE noPresionoEsc
+        JMP presionoEscape
+          noPresionoEsc:
+          JMP finalCapturadorOpcionesMenu   
+    presionoAyuda:
+      ;se recibe en el si el puntero a la matriz 
+      ;en el dh y dl se recibe filas y columnas 
+      ;en el CH se recibe la cantidad de filas
+      ;en el CL la cantidad de columnas
+      MOV dx, 0403h
+      MOV ch, 12
+      MOV cl, 44
+      lea si, msgVideoAyuda
+      call printMatrizEnVideoGenericBytes
+      call pressEnterContinueEco
+      XOR al, al
+      MOV teclaGuardada, al
+      JMP finalCapturadorOpcionesMenu
+    presionoAcercaDe:
+      MOV dx, 0403h
+      MOV ch, 12
+      MOV cl, 44
+      lea si, msgVideoAcercaDe
+      call printMatrizEnVideoGenericBytes
+      call pressEnterContinueEco
+      XOR al, al
+      MOV teclaGuardada, al
+      JMP finalCapturadorOpcionesMenu
+    presionoEscape:
+        MOV ax, 1
+        MOV salir, ax
+        JMP finalCapturadorOpcionesMenu
+  noPresionoTeclaAyudas:
+  
+  finalCapturadorOpcionesMenu:
+
+  popRegisters
+  ret
+capturadorOpcionesMenu endp
 
 limpiarPantalla proc near
   PUSH ax
@@ -299,6 +338,20 @@ limpiarPantalla proc near
   POP ax
   ret
 limpiarPantalla endp
+
+cleanPantalla proc near
+  pushRegisters
+  XOR bx, bx
+
+  cicloCleanPantalla:
+    MOV byte ptr matrizVideo[bx], 32
+    INC bx 
+  CMP bx, 4000
+  JB cicloCleanPantalla
+
+  popRegisters
+  ret
+cleanPantalla endp
 
 axezador proc near
     ; supone los indices en cl y ch (fil y col)
@@ -412,6 +465,61 @@ printMatrizEnVideoGeneric proc near
   popRegisters
   ret
 printMatrizEnVideoGeneric endp
+
+printMatrizEnVideoGenericBytes proc near
+  ;se recibe en el si el puntero a la matriz 
+  ;en el dh y dl se recibe filas y columnas 
+  ;en el CH se recibe la cantidad de filas
+  ;en el CL la cantidad de columnas
+  pushRegisters
+  XOR bx, bx
+  MOV var, si;guardar el inicio de la matriz
+  ciclo_PrintMatrizEnVideoGenericBytes:
+    MOV si, var
+    XOR ax, ax;calcular el numero de fila
+    or al, bl
+    MUL cl ; tamaño de columnas
+    ADD si, ax; sumar el numero de fila correspondiente
+    MOV ah, bl
+    ADD ah, dh
+    
+    pushRegisters
+      ;al, cantidad de columnas
+      ;ah, numero de fila
+      ;dl, numero de columna
+      MOV al, 80
+      MUL ah
+      XOR dh, dh
+      ADD ax, dx
+      shl ax, 1
+      mov di, ax ;posicion en la pantalla
+
+      mov  ax,0B800h
+      mov  es,ax
+
+      mov  cl, byte ptr[si]
+      xor ch, ch
+      inc si
+
+      cicloPrintFilaEnVideoGenericBytes:;Bucle que se encargara de pintar la string
+          mov  al, [si]        ;caracteres de la pantalla para limpiarla
+          mov  ah, 14          
+          OR ah, 10h
+          mov  es:[di], ax
+          inc  si             ;Pasamos a apuntar a la siguiente letra del saludo
+          inc  di
+          inc  di
+
+      LOOP cicloPrintFilaEnVideoGenericBytes
+      popRegisters
+    INC bl
+  CMP bl, ch
+  JB ciclo_PrintMatrizEnVideoGenericBytes
+
+
+  popRegisters
+  ret
+printMatrizEnVideoGenericBytes endp
 
 imprimirStrVideo proc near
   ;este metodo imprime un string en una parte especifica de
@@ -540,7 +648,7 @@ imprmirCursorVideo endp
 
 imprimirMatrizVideo proc near
   pushRegisters
-  CALL limpiarPantalla
+  ;CALL limpiarPantalla
   XOR dx, dx
   MOV ch, 25
   MOV cl, 80
@@ -586,7 +694,11 @@ elegirColorModo proc near
         JNE noEsModoFiller
         JMP ponerModoFiller
         noEsModoFiller:
-        JMP finalElegirColorModo
+          CMP byte ptr[si], 'C'
+          JNE noEsCleanPantalla
+          JMP opcionCleanPantalla
+          noEsCleanPantalla:
+            JMP finalElegirColorModo
     ponerModoPaint:
       XOR ah, ah
       MOV modo, ah
@@ -595,6 +707,10 @@ elegirColorModo proc near
       XOR ah, ah
       OR ah, 1
       MOV modo, ah   
+    JMP finalElegirColorModo
+    opcionCleanPantalla:
+      
+      CALL cleanPantalla  
     JMP finalElegirColorModo
   finalElegirColorModo:
 
@@ -647,28 +763,121 @@ cicloGeneral proc near
   CALL imprimirMatrizVideo
   CALL imprimirMenuVideo
   CALL imprmirCursorVideo
+
+
   ciclo_CicloGeneral:
-    CALL movimientoCursor
+    ;CALL movimientoCursor
+    CALL mouseEvent
     CMP salir, 1
     JE finalCicloGeneral
-    CMP teclaGuardada, ' '
-    JNE noPresionoEspacio
+    CMP mouseClick, 1
+    JNE noPresionoClick
     CALL elegirColorModo
     CALL pintar
-    noPresionoEspacio:
+    noPresionoClick:
 
-    ;CALL capturadorOpcionesMenu
+    CALL capturadorOpcionesMenu
     
     CALL verificarColisiones
-    CALL imprimirMatrizVideo
-    CALL imprimirMenuVideo
-    CALL imprmirCursorVideo
+     CALL imprimirMatrizVideo
+     CALL imprimirMenuVideo
+     CALL imprmirCursorVideo
     JMP ciclo_CicloGeneral
   finalCicloGeneral:
 
   popRegisters
   ret
 cicloGeneral endp
+
+mouseEvent proc near
+  pushRegisters
+    esperarMouse:
+    mov ax, 1h
+    int 33h
+    mov  ax, 3h
+    int  33h
+    CMP bx, 1
+    JE seMovioMouse
+    MOV ax, cx
+    MOV bl, 8
+    DIV bl
+    XOR ah, ah
+    CMP al, cursor[1]
+    JNE seMovioMouse
+
+    MOV ax, dx
+    MOV bl, 8
+    DIV bl
+    XOR ah, ah
+    CMP al, cursor[0]
+    JNE seMovioMouse
+    
+
+    ;Revisar el teclado por salir y ayuda y acerca de
+    CALL getKeyPress
+    JC presionoTeclaMouseEvent
+    mov ax, 2h
+    int 33h
+    JMP esperarMouse
+    mov  ax, 3h
+    int  33h
+    seMovioMouse:
+    mov  [mouseClick], bx ; Write the value of BX to mouseClick
+    mov  [mouseX], cx     ; Write the value of CX to mouseX
+    mov  [mouseY], dx     ; Write the value of DX to mouseY
+    
+
+    MOV ax, [mouseX]
+    MOV bl, 8
+    DIV bl
+    MOV cursor[1], al
+
+    MOV ax, [mouseY]
+    MOV bl, 8
+    DIV bl
+    MOV cursor[0], al
+    JMP finalMouseEvent
+
+    presionoTeclaMouseEvent:
+
+    CALL capturadorOpcionesMenu
+    JMP esperarMouse
+    finalMouseEvent:
+
+  popRegisters
+  ret
+mouseEvent endp
+
+printAX proc
+  ; imprime a la salida estándar un número que supone estar en el AX
+  ; supone que es un número positivo y natural en 16 bits.
+  ; lo imprime en decimal.  
+    
+    push AX
+    push BX
+    push CX
+    push DX
+
+    xor cx, cx
+    mov bx, 10
+  ciclo1PAX: xor dx, dx
+      div bx
+      push dx
+      inc cx
+      cmp ax, 0
+      jne ciclo1PAX
+      mov ah, 02h
+  ciclo2PAX: pop DX
+      add dl, 30h
+      int 21h
+      loop ciclo2PAX
+
+    pop DX
+    pop CX
+    pop BX
+    pop AX
+    ret
+printAX endP
 
   inicio: 
     
@@ -678,6 +887,7 @@ cicloGeneral endp
   mov ss, ax
 
   CALL cicloGeneral
+  ;CALL mouseEvent
 
   mov  ax,4C00h
   int  21h
