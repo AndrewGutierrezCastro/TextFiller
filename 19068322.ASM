@@ -116,17 +116,18 @@ datos segment
                      db 43," ========================================= "
 
     msgVideoPaletaColores db 32,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,14,14,15,15
-    espacio db 20h
+    msgVideoMenu db 38,"|AcerdaDe: H | Ayuda: A |Modo: P & F |"
+    espacio db 219
     ;matriz de paint
-    matrizVideo dw 4000 dup(9020h) ; COLOR, ASCII en TASM es AL|AH
-    numFilasCargadas db 0
-    cursos db 0,0,'K'
+    matrizVideo db 4000 dup(32) ;ASCII █ y color Azul
+
     N db 25
     M db 80
 
     x db 0;direccion
     y db 0;direccion
-    cursor db 0,0,1,0,'_', 250 
+    cursor db 0,0,1,0,178, 1 
+    modo db 0 ;0 modo paint | 1 modo filler
     teclaGuardada db 0
     salir dw 0
 datos ends
@@ -331,7 +332,7 @@ almacenador proc near
   ; retorna en el ax el contenido
   ; supone en [si] un ptr a la matriz.
   ; se supone en el ax el dato a guardar
-  
+  push ax
   push bx
   push cx
   push dx
@@ -341,17 +342,18 @@ almacenador proc near
   MOV bl, M ; tamaño de columnas
   MUL bl
   XOR ch, ch
+  ;shl cx, 1
   ADD ax, cx 
-  ADD si, ax; sumar el numero de fila correspondiente
   shl ax, 1
+  ADD si, ax; sumar el numero de fila correspondiente
+
   mov word ptr[si], dx  
 
   pop SI
   pop DX
   pop CX
   pop BX
-  ret
-
+  pop AX
   ret
 almacenador endp
 
@@ -368,6 +370,7 @@ printMatrizEnVideoGeneric proc near
     XOR ax, ax;calcular el numero de fila
     or al, bl
     MUL cl ; tamaño de columnas
+    shl ax, 1
     ADD si, ax; sumar el numero de fila correspondiente
     MOV ah, bl
     ADD ah, dh
@@ -379,6 +382,7 @@ printMatrizEnVideoGeneric proc near
       MOV al, 80
       MUL ah
       XOR dh, dh
+      shl dx, 1
       ADD ax, dx
       shl ax, 1
       mov di, ax ;posicion en la pantalla
@@ -391,7 +395,7 @@ printMatrizEnVideoGeneric proc near
       ;inc si
 
       cicloPrintFilaEnVideoGeneric:;Bucle que se encargara de pintar la string
-          mov  ax, [si]        ;caracteres de la pantalla para limpiarla
+          mov  ax, word ptr [si]        ;caracteres de la pantalla para limpiarla
           mov  es:[di], ax
           inc  si             ;Pasamos a apuntar a la siguiente letra del saludo
           inc  si
@@ -441,10 +445,44 @@ imprimirStrVideo proc near
       LOOP cicloImprimirStrVideo
   popRegisters
   ret
-  ret
 imprimirStrVideo endp
 
-imprimirPaletaColorVideo proc near
+imprimirStrVideoBytes proc near
+  ;este metodo imprime un string en una parte especifica de
+  ;la pantalla, se recibe la fila y columna en dh, dl
+  ;se recibe en el si el puntero al string like PASCAL
+  ;Trabaja con un arreglo de bytes, solo los caracteres
+  pushRegisters
+
+  MOV al, 80
+  MUL dh
+  shl ax, 1
+  XOR dh, dh
+  shl dx, 1
+  ADD ax, dx
+  mov di, ax ;posicion en la pantalla
+
+  mov  ax,0B800h
+  mov  es,ax
+
+  mov  cl, byte ptr[si]
+  xor ch, ch
+  inc si
+  cicloImprimirStrVideoBytes: 
+      mov  ax, [si]       
+      mov ah, 15 ; letra blanca fondo negro 
+      mov  es:[di], ax
+      inc  si             
+      inc  di
+      inc  di
+      LOOP cicloImprimirStrVideoBytes
+  popRegisters
+  ret
+
+  ret
+imprimirStrVideoBytes endp
+
+imprimirMenuVideo proc near
   ;este metodo imprime un string en una parte especifica de
   ;la pantalla, se recibe la fila y columna en dh, dl
   ;se recibe en el si el puntero al string like PASCAL
@@ -452,7 +490,7 @@ imprimirPaletaColorVideo proc near
   pushRegisters
   lea si, msgVideoPaletaColores
   MOV dh, 24
-  MOV dl, 0
+  MOV dl, 48
   MOV al, 80
   MUL dh
   shl ax, 1
@@ -468,20 +506,24 @@ imprimirPaletaColorVideo proc near
   xor ch, ch
   inc si
 
-  cicloImprimirPaletaColorVideo:    ;Bucle que se encargara de pintar la paleta de color
+  cicloimprimirPaletaColorVideo:    ;Bucle que se encargara de pintar la paleta de color
       mov  al, espacio    
-      MOV ah, [si]
-      SHL ah, 4    
+      MOV ah, [si]    
       mov  es:[di], ax
       inc  si             
       inc  di
       inc  di
 
-      LOOP cicloImprimirPaletaColorVideo
+      LOOP cicloimprimirPaletaColorVideo
+
+  lea si, msgVideoMenu
+  MOV dh, 24
+  XOR dl, dl
+  CALL imprimirStrVideoBytes
   popRegisters
   ret
   ret
-imprimirPaletaColorVideo endp
+imprimirMenuVideo endp
 
 imprmirCursorVideo proc near
   pushRegisters
@@ -508,39 +550,102 @@ imprimirMatrizVideo proc near
   ret
 imprimirMatrizVideo endp
 
-pintar proc near
+elegirColorModo proc near
   pushRegisters
   ;Esta parte lo que hace es elegir el color de la paleta y ponerlo en el cursor
   MOV al, cursor[0] 
   CMP al, 24
   JE estaEnLaPaletaDeColorX
-  JMP finalPintar
+  JMP finalElegirColorModo
   estaEnLaPaletaDeColorX:
     MOV al, cursor[1]
-    CMP al, 32
-    JB estaEnLaPaletaDeColorY
-    JMP finalPintar
+    CMP al, 47
+    JAE estaEnLaPaletaDeColorY
+    JMP puedeEstarEnMenu
     estaEnLaPaletaDeColorY:
       MOV si, offset msgVideoPaletaColores
       INC si
       XOR ah, ah
       MOV al, cursor[1]
+      SUB al, 48
       ADD si, ax
       MOV al, [si]
-      SHL al, 4
-      OR al, 10
       MOV byte ptr cursor[5], al
+      JMP finalElegirColorModo
+    puedeEstarEnMenu:
+      MOV si, offset msgVideoMenu
+      INC si
+      XOR ah, ah
+      MOV al, cursor[1]
+      ADD si, ax
+      CMP byte ptr[si], 'P'
+      JNE noEsModoPaint
+      JMP ponerModoPaint
+      noEsModoPaint:
+        CMP byte ptr[si], 'F'
+        JNE noEsModoFiller
+        JMP ponerModoFiller
+        noEsModoFiller:
+        JMP finalElegirColorModo
+    ponerModoPaint:
+      XOR ah, ah
+      MOV modo, ah
+    JMP finalElegirColorModo
+    ponerModoFiller:
+      XOR ah, ah
+      OR ah, 1
+      MOV modo, ah   
+    JMP finalElegirColorModo
+  finalElegirColorModo:
+
+  popRegisters
+  ret
+elegirColorModo endp
+
+pintar proc near
+  ;en el cursor esta el x & y del cursor actual
+  pushRegisters
+  CMP modo, 0
+  JE pintarModoPaint
+  CMP modo, 1
+  JE pintarModoFiller
+  pintarModoPaint:
+    CALL modoPaint
+  JMP finalPintar
+  pintarModoFiller:
+  JMP finalPintar
 
   finalPintar:
-
   popRegisters
   ret
 pintar endp
 
+modoPaint proc near
+  ;Este procedimiento pinta en modo paint
+  ; o sea de uno a uno
+  pushRegisters
+  MOV ch, cursor[0];poner el x & y de la matriz
+  MOV cl, cursor[1];para pinter en la matriz de color
+  MOV ah, cursor[5];mover el color actual del cursor
+  MOV al, 219  ;Poner un espacio en blanco en el caracter
+  lea si, matrizVideo
+  CALL almacenador
+
+  popRegisters
+  ret
+modoPaint endp
+
+modoFiller proc near
+  ;Este procedimiento pinta en modo filler
+  ;o sea como el balde
+
+  ret
+modoFiller endp
+
 cicloGeneral proc near
   pushRegisters
   CALL imprimirMatrizVideo
-  CALL imprimirPaletaColorVideo
+  CALL imprimirMenuVideo
   CALL imprmirCursorVideo
   ciclo_CicloGeneral:
     CALL movimientoCursor
@@ -548,6 +653,7 @@ cicloGeneral proc near
     JE finalCicloGeneral
     CMP teclaGuardada, ' '
     JNE noPresionoEspacio
+    CALL elegirColorModo
     CALL pintar
     noPresionoEspacio:
 
@@ -555,7 +661,7 @@ cicloGeneral proc near
     
     CALL verificarColisiones
     CALL imprimirMatrizVideo
-    CALL imprimirPaletaColorVideo
+    CALL imprimirMenuVideo
     CALL imprmirCursorVideo
     JMP ciclo_CicloGeneral
   finalCicloGeneral:
