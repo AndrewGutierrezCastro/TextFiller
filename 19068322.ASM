@@ -1,3 +1,72 @@
+; Este programa es un TextFiller con acceso a memoria de video  y uso directo del mouse 
+; 
+;        
+;                         
+;---------------------------------------------------------------------------------
+;                      Instituto Tecnologico de Costa Rica                    
+;                      
+;                      Ingeneria en computacion Plan 411
+;
+;                      Arquitectura De Computadores
+;
+;                      Kirstein Gatjens
+;
+;                      Andrew Jose Gutierrez Castro
+;
+;                      Carne: 2019068322
+;
+;                      Grupo: 2
+;---------------------------------------------------------------------------------
+
+;*********************************************************************************
+;                     Manual de Usuario
+;
+;    Primero en DOSBOX correr TASM 19068322.asm
+;    Seguidamente ejecutar  TLINK 19068322.obj
+;    Finalmente inicializar 19068322.EXE 
+;    Por ejemplo: ejecutar 19068322
+;
+;                 A:\TxTFiller>19068322.exe 
+;                 A:\TxtFiller>
+;                 +Ejecute el programa y de click en el DOSBOX para leer el mouse
+;                 +Para moverse use el mouse, para seleccionar de click          
+;                 +Los mensaje de ayuda y acercaDe se muestran presionando A & H
+;                 +Para elegir entre el modo Paint, Filler o limpiar la pantalla
+;                    posicione el mouse encima de P, F o C respectivamente y de click
+;                 +Para salir presione ESC
+;                 *PRESIONE ENTER PARA CONTINUAR*
+;    
+;     Seguir las instrucciones dadas el inicio de la ejecucion y solo debe usar el 
+;     programa
+;      
+;
+;*********************************************************************************
+;
+;---------------------------------------------------------------------------------
+;Partes:  
+;       A: Imprimir la matriz del txtfiller en modo video
+;       B: Imprimir en pantalla de video el menu y usar el teclado para opciones
+;           del menu
+;       C: Moverse con el mouse y mostrar el cursor
+;       D: Pintar en modo Paint
+;       E: Pintar en modo Filler
+;Estado:
+; A = Concluida con exito             B = Concluida con problemas especificos
+; C = Concluida con problemas mayores D = Diseño del algoritmo pero no inicia
+; E = No implementado
+;----------------------------------------------------------------------------------
+; Partes importantes a considerar su estado:
+; +Imprimir la matriz del txtfiller en modo video ESTADO: A (imprimirMatrizVideo)
+; 
+; +Imprimir en pantalla de video el menu y usar el teclado para opciones
+;   del menu ESTADO: A(imprimirMenuVideo, capturadorOpcionesMenu)
+;   
+; +Moverse con el mouse y mostrar el cursor ESTADO: A (mouseEvent, imprmirCursorVideo)
+;
+; +Pintar en modo Paint ESTADO: A(Pintar, pintarModoPaint)
+;
+; +Pintar en modo Filler ESTADO: A (Pintar, pintarModoFiller)
+;-----------------------------------------------------------------------------------
 printENTER MACRO
     push ax
     push dx
@@ -60,53 +129,58 @@ endm printSpace
 
 datos segment
 
-    AcerdaDe db "Solo debe ejecutar el programa y jugar.",10,13,7
-    db "Para moverse presione las flechas y para salir ESC",10,13,7,'$'
-    
+    AcerdaDe db "+Ejecute el programa y de click en el DOSBOX para leer el mouse",10,13,7
+    db "+Para moverse use el mouse, para seleccionar de click",10,13,7
+    db "+Los mensaje de ayuda y acercaDe se muestran presionando A & H",10,13,7
+    db "+Para elegir entre el modo Paint, Filler o limpiar la pantalla",10,13,7
+    db " posicione el mouse encima de P, F o C respectivamente y de click",10,13,7
+    db "+Para salir presione ESC",10,13,7
+    db "*PRESIONE ENTER PARA CONTINUAR*",10,13,7,'$'
     var dw ?
 
     msgMouseX db "Pos X:",'$'
     msgMouseY db "Pos Y:",'$'
 
     msgVideoAcercaDe db 43," ========================================= "
-                     db 43,"| Acerca De:            Sokoban TEC Arqui |"
+                     db 43,"| Acerca De:    TxTFiller       TEC Arqui |"
                      db 43,"| Intstituto Tecnologico de Costa Rica    |"
                      db 43,"| TxtFiller:                              |"
-                     db 43,"|    +Juego en Ensamblador con video      |"
+                     db 43,"|    +Text Filler en ensamblador con video|"
                      db 43,"|    +Desarrollado por Andrew JGC         |"
-                     db 43,"|    +Uso directo del teclado             |"
-                     db 43,"|    +Carga de niveles automatica         |"
-                     db 43,"|    +Carpeta Niveles necesaria con el    |"
-                     db 43,"|     ejecutable                          |"
+                     db 43,"|    +Uso directo del mouse               |"
+                     db 43,"|                                         |"
+                     db 43,"|    +Carnet: 2019068322                  |"
+                     db 43,"|    +Gutierrez-Andrew                    |"
                      db 43,"| Semestre I   -*ENTER PARA SEGUIR*- 2020 |"
                      db 43," ========================================= " 
 
     msgVideoAyuda    db 43," ========================================= "
-                     db 43,"| Instrucciones:        Sokoban TEC Arqui |"
+                     db 43,"| Instrucciones:   TxTFiller    TEC Arqui |"
                      db 43,"| Intstituto Tecnologico de Costa Rica    |"
                      db 43,"| TxtFiller:                              |"
-                     db 43,"|    +Para jugar use las flechas del te-  |"
-                     db 43,"|     clado                               |"
-                     db 43,"|    +Para salir presione la tecla ESC    |"
-                     db 43,"|    +Resetear el nivel:R HighScores: H   |"
-                     db 43,"|     Siguiente y anterior nivel: S, A    |"
-                     db 43,"|                                         |"
+                     db 43,"|  +Para jugar use el mouse               |"
+                     db 43,"|  +Dele click en C para hacer CleanScreen|"
+                     db 43,"|  +Presione A & H para ayuda y acercaDe  |"
+                     db 43,"|  +Para salir use ESC                    |"
+                     db 43,"|  +Posicione el cursor en la P o F para  |"
+                     db 43,"|     elegir entre modo Filler o Paint    |"
                      db 43,"| Semestre I   -*ENTER PARA SEGUIR*- 2020 |"
                      db 43," ========================================= "
 
 
-    msgVideoPaletaColores db 32,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,14,14,15,15
+    msgVideoPaletaColores db 32,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,14,14,15,15,0,0
     msgVideoMenu db 47,"|AcerdaDe: A | Ayuda: H |Modo: P & F | Clear: C"
     espacio db 219
     ;matriz de paint
     matrizVideo db 4000 dup(32) ;ASCII █ y color Azul
 
-    N db 25
+    N db 24
     M db 80
 
     x db 0;direccion
     y db 0;direccion
     cursor db 0,0,1,0,178, 1 
+    colorFiller db 0
     modo db 0 ;0 modo paint | 1 modo filler
     teclaGuardada db 0
     salir dw 0
@@ -369,8 +443,9 @@ axezador proc near
     MUL bl
     XOR ch, ch
     ADD ax, cx 
-    ADD si, ax; sumar el numero de fila correspondiente
     shl ax, 1
+    ADD si, ax; sumar el numero de fila correspondiente
+    
     mov ax, word ptr[si]    
 
     pop SI
@@ -650,8 +725,8 @@ imprimirMatrizVideo proc near
   pushRegisters
   ;CALL limpiarPantalla
   XOR dx, dx
-  MOV ch, 25
-  MOV cl, 80
+  MOV ch, N
+  MOV cl, M
   lea si, matrizVideo
   CALL printMatrizEnVideoGeneric
   popRegisters
@@ -721,6 +796,11 @@ elegirColorModo endp
 pintar proc near
   ;en el cursor esta el x & y del cursor actual
   pushRegisters
+  MOV al, 24
+  CMP al, byte ptr cursor[0]
+  JNE noEsPaletaColor
+    JMP finalPintar
+  noEsPaletaColor:
   CMP modo, 0
   JE pintarModoPaint
   CMP modo, 1
@@ -729,6 +809,18 @@ pintar proc near
     CALL modoPaint
   JMP finalPintar
   pintarModoFiller:
+    MOV ch, cursor[0]
+    MOV cl, cursor[1]
+    lea si, matrizVideo
+    CALL axezador
+    CMP ah, cursor[5]
+    JE finalPintar
+    MOV colorFiller, ah
+    MOV ch, cursor[0]
+    MOV cl, cursor[1]
+    PUSH cx
+    CALL modoFiller
+    add sp, 2
   JMP finalPintar
 
   finalPintar:
@@ -754,7 +846,105 @@ modoPaint endp
 modoFiller proc near
   ;Este procedimiento pinta en modo filler
   ;o sea como el balde
+  ;en la pila la primera palabra viene el x & y
+  ;POP cx; CH esta el x & cl esta el y
+  ;PUSH cx
+  sub sp, 4 ;   reservar memoria en la pila para las variables locales.
+  push bp
+  mov bp, sp   ; Salvo el viejo BP y pongo al BP a apuntar a mi registro de activación.
+    
+  push cx      ; salva los registros que se van a modificar 
 
+  lea si, matrizVideo
+  CALL axezador
+  ;en el ah viene el color
+  CMP ah, colorFiller
+  JE colorIgualPintarFiller
+  JMP finalModoFiller
+    colorIgualPintarFiller:
+      MOV ah, cursor[5];mover el color actual del cursor
+      MOV al, 219  ;Poner un espacio en blanco en el caracter
+      lea si, matrizVideo
+      CALL almacenador
+      ;Arriba es    x:-1, y: 0
+      ;Izquierda es x: 0, y:-1
+      ;Derecha es   x: 0, y:+1
+      ;Abajo es     x:+1, y: 0
+      ;JMP finalModoFiller
+      pintarFillerArriba:
+        DEC ch ;-1
+        CMP ch, -1
+        JNE sePuedeArriba       
+        JMP pintarFillerDerecha
+        sePuedeArriba:
+          lea si, matrizVideo
+          CALL axezador
+          ;en el ah viene el color| revisar que se puede pintar 
+          CMP ah, colorFiller
+          JE colorIgualArriba
+          JMP pintarFillerDerecha
+          colorIgualArriba:
+          PUSH cx
+          CALL modoFiller
+          ADD sp, 2
+      pintarFillerDerecha:
+        INC ch; devolver el anterior cambio
+        INC cl; mover a la derecha uno
+        CMP cl, 80
+        JNE sePuedeDerecha
+        JMP pintarFillerAbajo
+        sePuedeDerecha:
+          lea si, matrizVideo
+          CALL axezador
+          ;en el ah viene el color| revisar que se puede pintar 
+          CMP ah, colorFiller
+          JE colorIgualDerecha
+          JMP pintarFillerAbajo
+          colorIgualDerecha:
+            PUSH cx
+            CALL modoFiller
+            ADD sp, 2
+      pintarFillerAbajo:
+        DEC cl;devolver el cambio anterior de y
+        INC ch;bajar uno para revisar abajo
+        CMP ch, 24
+        JB sePuedeAbajo
+        JMP pintarFillerIzquierda
+        sePuedeAbajo:
+          lea si, matrizVideo
+          CALL axezador
+          ;en el ah viene el color| revisar que se puede pintar 
+          CMP ah, colorFiller
+          JE colorIgualAbajo
+          JMP pintarFillerIzquierda
+          colorIgualAbajo:
+            PUSH cx
+            CALL modoFiller
+            ADD sp, 2
+      pintarFillerIzquierda:
+        DEC ch;devolver el cambio anterior de x
+        DEC cl;restar uno para moverse a la izquierda
+        CMP cl, -1
+        JNE sePuedeIzquierda
+        JMP finalModoFiller
+          sePuedeIzquierda:
+            lea si, matrizVideo
+            CALL axezador
+            ;en el ah viene el color| revisar que se puede pintar 
+            CMP ah, colorFiller
+            JE colorIgualIzquierda
+            JMP finalModoFiller
+            colorIgualIzquierda:
+              PUSH cx
+              CALL modoFiller
+              ADD sp, 2
+
+  finalModoFiller:
+
+    pop cx                      ; restaura los registros que se modificaron
+
+    pop bp                      ; restaura el viejo BP
+    add sp, 4                   ; Se libera la memoria de las variables locales
   ret
 modoFiller endp
 
@@ -766,22 +956,23 @@ cicloGeneral proc near
 
 
   ciclo_CicloGeneral:
-    ;CALL movimientoCursor
+
+    CALL imprimirMatrizVideo
+    CALL imprimirMenuVideo
+    CALL imprmirCursorVideo
     CALL mouseEvent
     CMP salir, 1
     JE finalCicloGeneral
     CMP mouseClick, 1
     JNE noPresionoClick
-    CALL elegirColorModo
     CALL pintar
+    CALL elegirColorModo
+    
     noPresionoClick:
 
     CALL capturadorOpcionesMenu
     
-    CALL verificarColisiones
-     CALL imprimirMatrizVideo
-     CALL imprimirMenuVideo
-     CALL imprmirCursorVideo
+    
     JMP ciclo_CicloGeneral
   finalCicloGeneral:
 
@@ -887,9 +1078,9 @@ printAX endP
   mov ds, ax
   mov ax, pila
   mov ss, ax
-
+  printAcercaDe
+  CALL pressEnterContinueEco
   CALL cicloGeneral
-  ;CALL mouseEvent
 
   mov  ax,4C00h
   int  21h
