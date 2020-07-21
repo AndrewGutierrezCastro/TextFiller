@@ -67,6 +67,24 @@
 ;
 ; +Pintar en modo Filler ESTADO: A (Pintar, pintarModoFiller)
 ;-----------------------------------------------------------------------------------
+;EXPLICACION ALGORTIMO RECURSIVO 
+;
+;Primero envio por la pila la posicion del cursor
+;En el procedimiento guardo campo para la variable local a usar que serian las posiciones
+;de arriba, izquierda, abajo y derecha. Como se ejecuta una a la vez reutilizo ese espacio 
+;en la pila
+;
+;Primero reviso que la poscion actual se pueda pintar y si es asi, pinto luego reviso 
+;las posiciones colindantes primero arriba para la cual se suma uno el x y el Y queda igual
+;Y asi sucesivamente con las demas posiciones
+;dependiendo de la direccion cambia la operacion
+    ;Arriba es    x:-1, y: 0
+    ;Izquierda es x: 0, y:-1
+    ;Derecha es   x: 0, y:+1
+    ;Abajo es     x:+1, y: 0
+;Se pone en la pila la nueva posicion y se llama recursivamente 
+;en el procedimiento se valida si se puede pintar o no
+
 printENTER MACRO
     push ax
     push dx
@@ -295,8 +313,6 @@ movimientoCursor proc near
     ;Izquierda es x: 0, y:-1
     ;Derecha es   x: 0, y:+1
     ;Abajo es     x:+1, y: 0
-    ;De esta forma puedo hacer un procedimiento que busque colisiones
-    ;pero sumando siempre.
     presionoArriba:
       MOV x, -1
       MOV y, 0
@@ -741,8 +757,8 @@ elegirColorModo proc near
   JE estaEnLaPaletaDeColorX
   JMP finalElegirColorModo
   estaEnLaPaletaDeColorX:
-    MOV al, cursor[1]
-    CMP al, 47
+    MOV al, cursor[1] ; MOVER EL Y al AL
+    CMP al, 48
     JAE estaEnLaPaletaDeColorY
     JMP puedeEstarEnMenu
     estaEnLaPaletaDeColorY:
@@ -816,9 +832,9 @@ pintar proc near
     CMP ah, cursor[5]
     JE finalPintar
     MOV colorFiller, ah
-    MOV ch, cursor[0]
-    MOV cl, cursor[1]
-    PUSH cx
+    MOV ah, cursor[0]
+    MOV al, cursor[1]
+    PUSH ax
     CALL modoFiller
     add sp, 2
   JMP finalPintar
@@ -847,14 +863,14 @@ modoFiller proc near
   ;Este procedimiento pinta en modo filler
   ;o sea como el balde
   ;en la pila la primera palabra viene el x & y
-  ;POP cx; CH esta el x & cl esta el y
-  ;PUSH cx
-  sub sp, 4 ;   reservar memoria en la pila para las variables locales.
+  ; CH esta el x & cl esta el y
+  
+  sub sp, 2 ;   reservar memoria en la pila para las variables locales.
   push bp
   mov bp, sp   ; Salvo el viejo BP y pongo al BP a apuntar a mi registro de activación.
     
   push cx      ; salva los registros que se van a modificar 
-
+  MOV cx, word ptr[bp+6];agarrar el x & y enviado por pila
   lea si, matrizVideo
   CALL axezador
   ;en el ah viene el color
@@ -878,15 +894,10 @@ modoFiller proc near
         JMP pintarFillerDerecha
         sePuedeArriba:
           lea si, matrizVideo
-          CALL axezador
-          ;en el ah viene el color| revisar que se puede pintar 
-          CMP ah, colorFiller
-          JE colorIgualArriba
-          JMP pintarFillerDerecha
           colorIgualArriba:
-          PUSH cx
-          CALL modoFiller
-          ADD sp, 2
+            PUSH cx           ;mover la nueva posicion a la pila como parametro 
+            CALL modoFiller
+            ADD sp, 2         ;quitar el tamaño enviado por la pila
       pintarFillerDerecha:
         INC ch; devolver el anterior cambio
         INC cl; mover a la derecha uno
@@ -894,16 +905,10 @@ modoFiller proc near
         JNE sePuedeDerecha
         JMP pintarFillerAbajo
         sePuedeDerecha:
-          lea si, matrizVideo
-          CALL axezador
-          ;en el ah viene el color| revisar que se puede pintar 
-          CMP ah, colorFiller
-          JE colorIgualDerecha
-          JMP pintarFillerAbajo
           colorIgualDerecha:
-            PUSH cx
+            PUSH cx           ;mover la nueva posicion a la pila como parametro
             CALL modoFiller
-            ADD sp, 2
+            ADD sp, 2         ;quitar el tamaño enviado por la pila
       pintarFillerAbajo:
         DEC cl;devolver el cambio anterior de y
         INC ch;bajar uno para revisar abajo
@@ -911,16 +916,9 @@ modoFiller proc near
         JB sePuedeAbajo
         JMP pintarFillerIzquierda
         sePuedeAbajo:
-          lea si, matrizVideo
-          CALL axezador
-          ;en el ah viene el color| revisar que se puede pintar 
-          CMP ah, colorFiller
-          JE colorIgualAbajo
-          JMP pintarFillerIzquierda
-          colorIgualAbajo:
-            PUSH cx
+            PUSH cx          ;mover la nueva posicion a la pila como parametro
             CALL modoFiller
-            ADD sp, 2
+            ADD sp, 2        ;quitar el tamaño enviado por la pila
       pintarFillerIzquierda:
         DEC ch;devolver el cambio anterior de x
         DEC cl;restar uno para moverse a la izquierda
@@ -928,23 +926,17 @@ modoFiller proc near
         JNE sePuedeIzquierda
         JMP finalModoFiller
           sePuedeIzquierda:
-            lea si, matrizVideo
-            CALL axezador
-            ;en el ah viene el color| revisar que se puede pintar 
-            CMP ah, colorFiller
-            JE colorIgualIzquierda
-            JMP finalModoFiller
             colorIgualIzquierda:
-              PUSH cx
+              PUSH cx       ;mover la nueva posicion a la pila como parametro
               CALL modoFiller
-              ADD sp, 2
+              ADD sp, 2     ;quitar el tamaño enviado por la pila
 
   finalModoFiller:
 
     pop cx                      ; restaura los registros que se modificaron
 
     pop bp                      ; restaura el viejo BP
-    add sp, 4                   ; Se libera la memoria de las variables locales
+    add sp, 2                   ; Se libera la memoria de las variables locales
   ret
 modoFiller endp
 
